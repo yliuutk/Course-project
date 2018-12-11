@@ -1,0 +1,202 @@
+---
+title: "Exploring wind farm data (I): data preprocessing, visulization and preliminary analysis"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## I. Introduction of the three posts
+
+The three posts try to expore 10 large sets of wind farm data where each one contains 16,800 data points. Although based on the same data set, the three posts focus on differents aspects. 
+
+> Post 1 focuses on the data preprocessing, visualization and some preliminary analysis. 
+
+> Post 2 focuses on a practical method for anomaly detection or maintenance event detection. 
+
+> Post 3 focues on the cluster analysis.
+
+The purpose of these three posts are threefolds.
+
+> First, they are final projects in my data mining class and each post focuses on different aspects of what we learnt in the class. 
+
+> Second, they aim at providing the wind farm owners and electric power system operaters with some insights from the huge data sets.
+
+> Finally, they can serve as tutorials for 1st year PhD student in power/energy/electrical engineering, so that they can have a basic idea to deal with the realistic wind power data in their course/reserach projects.
+
+The following sections are organized as follows.
+
+> Section II introduces how to access the data source and explains the data set in detail.
+
+> Section III gives the problem description of post 1.
+
+> Section IV performs data preprocessing from several aspects
+
+> Section V conducts some basic data visualization and preliminary analysis
+
+## II. Data source and data descprition
+
+### 1 Data source
+
+The data comes from Ref [1] and can be downloaded by the link in [2]. 
+
+> [1] Tao Hong, Pierre Pinson, Shu Fan, Hamidreza Zareipour, Alberto Troccoli and Rob J. Hyndman, "Probabilistic energy forecasting: Global Energy Forecasting Competition 2014 and beyond", International Journal of Forecasting, vol.32, no.3, pp 896-913, July-September, 2016.
+
+> [2] http://blog.drhongtao.com/2017/03/gefcom2014-load-forecasting-data.html
+
+It is orignally prepared for a global competition. The wind farm data used in this post can be obtained by following steps. We select the data for Task 15 because it contains the largest number of data points. 
+
+> 1) unzip the file "GEFCom2014-W_V2.zip"
+
+> 2) go the the directory: wind >> Task15>>Task15_W_Zone1_10
+
+
+### 2 Data decription
+The folder contains 10 csv files for 10 wind farms.Each csv file contains 16,800 data points recorded at every hour, which is equivalent to 700-day historical data from Jan. 1st, 2012 to Dec. 1st, 2013. We will combine the data of the 10 wind farms together and the final data set contains 168,000 data points.
+
+Each data point has 7 attributes. Their meanings are below.
+
+> 1 ZONEID. It means the ID of a wind farm, ranging from 1 to 10.
+
+> 2 TIMESTAMP. It is in the format of "20120101 1:00" which gives the year, month, date and hour information.
+
+> 3 TARGETVAR. It means wind power generation, which has been normalized by the nominal capacities of each wind farm.
+
+> 4-5 U10 and V10. They means the wind speeds along u and v directions at the height of 10 meters. The u and v directions refer to zonal and meridionoal directions.
+
+> 6-7 U100 and V100. Similar with U10 and V10, but they mean the wind speed measured at the height of 100 meters.
+
+## III. Problem description of Post 1
+
+Due to the climate change, the traditional energy resources are gradually replaced by renewable energies in recent years. The most promising renewable energy is wind power. However, the wind has very strong stochastic attribute and the wind power is very hard to be accurately predicted. This poses a great challenge to electric power system operators and may make the power system not secure any more. To ensure the secure operation, we need to improve the wind power forecasting accuracy. There are many efforts in the power system community. 
+
+This post 1 focuses on the data preprocessing, visualization and some preliminary analysis. The main goal is to 
+
+> 1) Convert some atributes and add new attributes to the data set, for the convenience of further analysis
+
+> 2) Give an overview visualization of the data set for wind farm owners and electric power system operators
+
+> 3) Provide wind farm owners and the electric power system operators some preliminary analysis results
+
+
+## IV. Data preprocessing
+### 1. Read the 10 csv data files into R and combine them together
+```{r}
+ZoneNo <- 1:10      # we have ten wind farms
+data <- data.frame()
+for(i in ZoneNo)
+{ 
+  temp <- read.csv(paste("./Input/Task15_W_Zone",i,".csv",sep=""), header=T, dec='.', na.strings=c('NA'))
+  data <- rbind(data, temp)
+}
+head(data,3)
+nrow(data)
+summary(data)
+```
+
+
+### 2. Convert and extract new attributes from TIMESTAMP
+
+The outlier detection method in this post depends on the the wind speed and wind power at several consecutive hours, so it is necessary to extract the hour attributes from the original attribute TIMESTAMP. This is achieved by a date-time conversion function " strptime".
+
+```{r}
+# Force the attribute "ZONEID" as a factor with levels from 1 to 10
+data$ZONEID <- as.factor(data$ZONEID)
+
+# Convert the attribute "TIMESTAMP" into the class "POSIXt" to represent calendar dates and times
+data$TIMESTAMP <- strptime(data$TIMESTAMP, format="%Y%m%d %H")
+
+# Extract new attributes year, month, date and hour from TIMESTAMP 
+data$YEAR  <- as.numeric(format(data$TIMESTAMP, "%Y"))  # Calendar year with the century   (i.e. 2012/2013/2014/...)
+data$MONTH <- as.numeric(format(data$TIMESTAMP, "%m"))  # Calendar month as decimal number (i.e. 01/02/.../12)
+data$DAY   <- as.numeric(format(data$TIMESTAMP, "%j"))  # Day of year as decimal number    (i.e. 001/002/.../365 or366)
+data$HOUR  <- as.numeric(format(data$TIMESTAMP, "%H"))  # Hours as decimal number          (i.e. 00/01/.../23)
+
+```
+
+### 2. Convert the wind speed given by u and v to an absolute value of wind speed and the angle in degree. 
+
+In the data set, the wind speed is measured along a u direction and a v direction because they are easy to measure. But these orginal measurements are not convenient to use in the analysis. Usually, wind farm owners are more interested in the absolute value of the wind speed and the wind direction given by a angle in degree. Therefore, it is necessary to preprocess the the attribute U10, V10, U100 and V100. The method to convert the attribute is shown in the code. Finally, we get four new attributes:
+
+> WS10 : Wind speed at 10 meters height
+
+> WS100 : Wind speed at 100 meters height
+
+> WD10: Wind direction at 10 meters height
+
+> WD100: Wind direction at 100 meters height
+ 
+```{r}
+# 
+data$WS10  <- sqrt(data$U10^2  + data$V10^2)
+data$WD10  <- 180/pi*atan2(data$U10,  data$V10)
+data$WD10  <- ifelse(data$WD10>=0,  data$WD10,  data$WD10+360)
+
+data$WS100 <- sqrt(data$U100^2 + data$V100^2)
+data$WD100 <- 180/pi*atan2(data$U100, data$V100)
+data$WD100 <- ifelse(data$WD100>=0, data$WD100, data$WD100+360)
+```
+
+### 3. Add the new attributes and form the raw data set
+```{r}
+name <- c("TIMESTAMP", "YEAR", "MONTH", "DAY", "HOUR", "ZONEID", "TARGETVAR", "U10", "V10", "WS10", "WD10", "U100", "V100", "WS100", "WD100")
+data <- data[, name]
+head(data,3)
+nrow(data)
+summary(data)
+save(data,file=paste("./RData/Raw_Data.Rdata",sep=""))
+```
+
+
+## V. Basic data visualization and preliminary analysis
+There are several things that the wind farm operators want to see when given a data set.
+
+### 1. What is the distribution of wind speed at different heights?
+It shows that the wind speeds at 10 meters heights are usually smaller than those at 100 meters heights. Most wind speeds are 3 meters per second at 10 meters high while are 7 meters per second at 100 meters high.
+```{r}
+hist(data$WS10)
+hist(data$WS100)
+```
+### 2. What is the distribution of wind power?
+
+It shows that, a very large portion of data points have zero wind power. That's why they can not be directly regarded as outliers and be deleted, becasue this will reduce the number of data points a lot. Also, it is too aggresive to delete all the data points with zero wind power because some zero power data points are normal data. We need to find a better way to differentiate the real outliers and the normal data points.
+
+Also, it is interesting that most wind powers tend to go to the two extremes, i.e., they tend to have very small values (near zero) or very large values (near one). They rarely have median values. One possible reason is that, wind turbine can only generate wind power with a given range of wind speed, i.e., [WS_min, WS_max]. 
+
+```{r}
+hist(data$TARGETVAR)
+```
+
+### 3. Any relationships between wind power and wind speed?
+The wind power increases with the wind speed no matter which wind speed is used, i.e., at 10 meters high, 100 meters high, or their average. It also shows that: the wind power not only depends on the wind speed, but also depends on some other factors.
+
+```{r}
+plot(data$WS10,data$TARGETVAR)
+plot(data$WS100,data$TARGETVAR)
+plot((data$WS100+data$WS10)/2,data$TARGETVAR)
+```
+
+### 4. How to use the wind direction information?
+The wind direction is represented by the angle in degree. It is not good to directly use the angle in the analysis since the angle of 1 degree and 359 degree are almost the same direction despite their large difference. Therefore, we adopt the cosine function of the angle to perform the analysis.
+
+As is shown in the figures, the absolute values of wind directions can not provide any insightful information. However, the cosine function of angles give some interesting results.
+
+First, the distribution of wind direction at 10 meters high and 100 meters high are almost same, which shows the wind direction measurements work properly. Second, most of the cosine values are -1 and 1, which means the angle is 180 degree and 0 degree respectively; while less cosine values are 0, which means the agnle is 90 degre and 270 degree. This result shows that the wind direction tends to be along the u direction instead of the v direction in this area where wind farms locate.
+
+```{r}
+hist(data$WD10)
+hist(data$WD100)
+hist(cos(data$WD10))
+hist(cos(data$WD100))
+```
+
+### 5 How about the wind speed and wind power at the 10 different wind farms?
+
+The result shows the average wind speed of the 10 wind farms are roughly the same. However, the wind farm #1, #3 and #9 tend to have less over high wind speed. This means these three wind farms tend to have more secure operation conditions for the wind turbine generators in the studied years.
+
+Also, the result shows that wind farm #3, #5, #6, #10 can averagely generate more wind power than other wind farms. So, these wind farms should be expanded and we could install more wind turbines at these wind farms.
+```{r}
+plot(data$ZONEID, data$WS10)
+plot(data$ZONEID, data$WS100)
+plot(data$ZONEID, data$TARGETVAR)
+```

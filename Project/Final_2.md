@@ -1,0 +1,639 @@
+Exploring wind farm data (II): Maintenance event detection or anomaly
+detection
+================
+
+## I. Introduction of the three posts
+
+The three posts try to expore 10 large sets of wind farm data where each
+one contains 16,800 data points. Although based on the same data set,
+the three posts focus on differents aspects.
+
+> Post 1 focuses on the data preprocessing, visualization and some
+> preliminary analysis.
+
+> Post 2 focuses on a practical method for anomaly detection or
+> maintenance event detection.
+
+> Post 3 focues on the cluster analysis.
+
+The purpose of these three posts are threefolds.
+
+> First, they are final projects in my data mining class and each post
+> focuses on different aspects of what we learnt in the class.
+
+> Second, they aim at providing the wind farm owners and electric power
+> system operaters with some insights from the huge data sets.
+
+> Finally, they can serve as tutorials for 1st year PhD student in
+> power/energy/electrical engineering, so that they can have a basic
+> idea to deal with the realistic wind power data in their
+> course/reserach projects.
+
+The following sections are organized as follows.
+
+> Section II introduces input data of this post 2.
+
+> Section III gives the problem description of post 2.
+
+> Section IV introduces the existing methods and the method used in this
+> post
+
+> Section V conducts the anomaly detection
+
+## II. Input Data
+
+### 1 Data source
+
+The data comes from Ref \[1\] and can be downloaded by the link in
+\[2\].
+
+> \[1\] Tao Hong, Pierre Pinson, Shu Fan, Hamidreza Zareipour, Alberto
+> Troccoli and Rob J. Hyndman, “Probabilistic energy forecasting: Global
+> Energy Forecasting Competition 2014 and beyond”, International Journal
+> of Forecasting, vol.32, no.3, pp 896-913, July-September, 2016.
+
+> \[2\]
+> <http://blog.drhongtao.com/2017/03/gefcom2014-load-forecasting-data.html>
+
+It is orignally prepared for a global competition. The wind farm data
+used in this post can be obtained by following steps. We select the data
+for Task 15 because it contains the largest number of data points.
+
+> 1)  unzip the file “GEFCom2014-W\_V2.zip”
+
+> 2)  go the the directory: wind \>\> Task15\>\>Task15\_W\_Zone1\_10
+
+### 2 Input data of post 2
+
+The input data of post 2 is the data saved after data preprocessing in
+post 1 (named as Raw\_Data.Rdata). It can be accessed from the directory
+“./RData/Raw\_Data.Rdata”.
+
+It has combined the 10 wind farm data togehter, has converted some
+attributes and added some new attributes. Finally, the resulted data set
+contains 168,000 data points and attributes are explanied below.
+
+> 1 TIMESTAMP. It is in the format of “20120101 1:00” which gives the
+> year, month, date and hour information.
+
+> 2-5 YEAR, MONTH, DAY, HOUR. Added attributes
+
+> 6 ZONEID. Index of wind farm
+
+> 7 TARGETVAR. It means wind power generation, which has been normalized
+> by the nominal capacities of each wind farm.
+
+> 8-9 U10 and V10. They means the wind speeds along u and v directions
+> at the height of 10 meters. The u and v directions refer to zonal and
+> meridionoal directions.
+
+> 10 WS10. Wind speed at 10 meters height
+
+> 11 WD10. Wind direction at 10 meters height
+
+> 12-13 U100 and V100. Similar with U10 and V10, but they mean the wind
+> speed measured at the height of 100 meters.
+
+> 14 WS100. Wind speed at 100 meters height
+
+> 15 WD100. Wind direction at 100 meters height
+
+## III. Problem description
+
+Due to the climate change, the traditional energy resources are
+gradually replaced by renewable energies in recent years. The most
+promising renewable energy is wind power. However, the wind has very
+strong stochastic attribute and the wind power is very hard to be
+accurately predicted. This poses a great challenge to electric power
+system operators and may make the power system not secure any more. To
+ensure the secure operation, we need to improve the wind power
+forecasting accuracy. There are many efforts in the power system
+community.
+
+Especially, in the wind power forecasting, it is very important to
+perform maintenance event detection to have a high-quality data set for
+analysis. The detected maitenance events are also useful for wind farm
+owners to improve their situational awareness and make better decisions.
+
+## IV. Existing methods
+
+Wind farms are under maintance regularly. During maintance, it can be
+happen in the data set that the wind speed is very high but the wind
+power is zero. The data related to maintance should be removed before
+further data analysis.
+
+Some existing techniques adopt a very aggresive way to remove all data
+points whose wind power is zero and wind speed is very high. However,
+this may remove too many data points and deteriorate the data quality.
+It may wrongly detect some normal data as outliers. For example, in
+normal operations, the high-speed-zero-power situation can also happen
+when the protection of wind turbine is activated during very high wind
+speed.
+
+In this post, we adopts a more conservative way given in \[1\] to detect
+the outliers. The basic idea is that: Outliers (or maitanance events)
+are detected only when the wind powers remain zero while wind speeds
+remain high for consecutive X hours or more. The X can be 12, 24, 36,
+48, etc depending on the experience of how long the maintance will
+take.This kind of outlier detection method is more flexible and more
+practical for wind farm owners and power system operators.
+
+> \[1\] Zhang, Y., & Wang, J. (2016). K-nearest neighbors and a kernel
+> density estimator for GEFCom2014 probabilistic wind power forecasting.
+> International Journal of forecasting, 32(3), 1074-1080.
+
+## V. Anomaly detection
+
+### 1 Read the input data
+
+``` r
+load(paste("./RData/Raw_Data.Rdata",sep=""))
+raw_data   <- data  ## the data before the anomaly detection
+clean_data <- NULL      ## the data after the anomaly detection
+```
+
+### 2 Data visualization for each wind farm
+
+By looking at the scatter plot of wind power and wind speed (average of
+wind speed at 10 meters and 100 meters height), we can have an idea of
+the outliers in the data set.
+
+For simplicity, only the data of wind farm \#8 are visualized as an
+example. The figure shows that most of the data fall into the balck
+region. This region is closely to a three-order polynomial function,
+which coincides with the theoritical analysis. However, there are many
+points in the bottom right, whose wind speed is very large but the wind
+power is zero. They are very likely to be outliers.
+
+``` r
+ZONEID <- 8
+zone_data <- data[data$ZONEID==ZONEID, ]
+plot((zone_data$WS100+zone_data$WS10)/2,zone_data$TARGETVAR)
+```
+
+![](Final_2_files/figure-gfm/unnamed-chunk-2-1.png)<!-- -->
+
+### 2 Event detection using 48 consecutive hours criteria
+
+To further confirm the outliers in each wind farm, we used the criteria
+of 48 consecutive hours. In the R code below, the part of implementing
+this criteria is requested from the author of \[1\] who proposed it.
+
+> \[1\] Zhang, Y., & Wang, J. (2016). K-nearest neighbors and a kernel
+> density estimator for GEFCom2014 probabilistic wind power forecasting.
+> International Journal of forecasting, 32(3), 1074-1080.
+
+The meaning of the output is explained below.
+
+> The output is a outliers list for each wind farm. If a wind farm has
+> no outlier data, it will not be put in the output.
+
+> For each outlier list, the 1st and 2nd columns mean the data point
+> index of start and end. In other words, for all data points between
+> them, the wind power is zero.
+
+> The 3rd column mean the length of the outlier data points. For
+> example, in wind farm \#2, 177 means there are consecutive 177 hours
+> where the wind power is zero.
+
+> The 4th and 5th column mean the start time stamp and the end time
+> stamp in the format of original data.
+
+The results below show that:
+
+> Only wind farm \#2, \#5, \#8, \#9 has outliers (or maintenance events)
+> based on 48 hours criteria
+
+> Wind farm \#2,\#5, \#8 and \#9 has 2,1,4,4 maintenance events
+> respecitvely.
+
+> Wind farm \#2 has the longest single maintenance event lasting 177
+> hours and the second longest single event is 132 hours for wind farm
+> \#8.
+
+> The total number of maintenance is 11 times. From their distribution
+> in wind farms, we can see that, wind farm \#8 and 9 are more
+> frequently maintained (4 times).
+
+> The total hours of maintenance is 790 hours. From their distribution
+> in wind farms, we can see that, wind farm \#8 has the longest total
+> maintenance hours (285 hours).
+
+``` r
+FarmNo <- 1:10   # we have ten wind farms
+MAX_LENGTH <- 48
+OUTLIER_LIST <- list(WF1=NULL, WF2=NULL, WF3=NULL, WF4=NULL, WF5=NULL, WF6=NULL, WF7=NULL, WF8=NULL, WF9=NULL, WF10=NULL)
+
+for(ZONEID in FarmNo)
+{
+  OUTLIER_LIST[[ZONEID]] <- data.frame(START=rep(NA,20), END=rep(NA,20), LENGTH=rep(NA,20), START_TIMESTAMP=rep(NA,20), END_TIMESTAMP=rep(NA,20))
+  zone_data <- data[data$ZONEID==ZONEID, ]
+  zero_index <- which(zone_data$TARGETVAR==0)
+  m <- length(zero_index)
+  
+  
+  i <- 1
+  temp <- 0
+  while(i < m)
+  {
+    start <- i
+    while((zero_index[i+1]==(zero_index[i]+1))&((i+1)<=m)) i <- i + 1
+    end <- i
+    if(start!=end)
+    {
+      start_index <- zero_index[start]
+      end_index   <- zero_index[end]
+      start_end   <- end_index-start_index+1
+      if(start_end >= MAX_LENGTH)
+      {
+        temp <- temp + 1
+        OUTLIER_LIST[[ZONEID]]$START[temp]  <- start_index
+        OUTLIER_LIST[[ZONEID]]$END[temp]    <- end_index
+        OUTLIER_LIST[[ZONEID]]$LENGTH[temp] <- start_end
+        OUTLIER_LIST[[ZONEID]]$START_TIMESTAMP[temp]  <- format(zone_data$TIMESTAMP[start_index], "%Y%m%d %H:%M")
+        OUTLIER_LIST[[ZONEID]]$END_TIMESTAMP[temp]    <- format(zone_data$TIMESTAMP[end_index], "%Y%m%d %H:%M")
+      }
+    }
+    i <- i + 1
+  }
+  OUTLIER_LIST[[ZONEID]] <- OUTLIER_LIST[[ZONEID]][-((temp+1):20), ]
+
+  
+  outlier_amount <- dim(OUTLIER_LIST[[ZONEID]])[1]
+  if(outlier_amount != 0)
+  {
+    vec <- vector()
+    for(i in 1:outlier_amount)
+    {
+      start_index <- OUTLIER_LIST[[ZONEID]]$START[i]
+      end_index   <- OUTLIER_LIST[[ZONEID]]$END[i]
+      vec <- c(vec, -start_index:-end_index)
+    }
+    clean_data <- rbind(clean_data, zone_data[ vec, ])
+    cat("Wind Farm #", ZONEID, "\n", sep="")
+    print(OUTLIER_LIST[[ZONEID]])
+    cat("\n")
+  }
+  else
+  {
+    clean_data <- rbind(clean_data, zone_data)
+  }
+}
+```
+
+    ## Wind Farm #2
+    ##   START   END LENGTH START_TIMESTAMP  END_TIMESTAMP
+    ## 1 15839 16015    177  20131021 23:00 20131029 07:00
+    ## 2 16128 16182     55  20131103 00:00 20131105 06:00
+    ## 
+    ## Wind Farm #5
+    ##   START  END LENGTH START_TIMESTAMP  END_TIMESTAMP
+    ## 1  2567 2620     54  20120416 23:00 20120419 04:00
+    ## 
+    ## Wind Farm #8
+    ##   START   END LENGTH START_TIMESTAMP  END_TIMESTAMP
+    ## 1  2806  2937    132  20120426 22:00 20120502 09:00
+    ## 2 11935 11982     48  20130512 07:00 20130514 06:00
+    ## 3 15024 15080     57  20130918 00:00 20130920 08:00
+    ## 4 15418 15465     48  20131004 10:00 20131006 09:00
+    ## 
+    ## Wind Farm #9
+    ##   START  END LENGTH START_TIMESTAMP  END_TIMESTAMP
+    ## 1  3565 3614     50  20120528 13:00 20120530 14:00
+    ## 2  4421 4473     53  20120703 05:00 20120705 09:00
+    ## 3  4860 4914     55  20120721 12:00 20120723 18:00
+    ## 4  7101 7161     61  20121022 21:00 20121025 09:00
+
+``` r
+save(clean_data,file=paste("./RData/Clean_Data.Rdata",sep=""))
+
+freq48 <- NULL
+dura48 <- NULL
+for(ZONEID in FarmNo)
+{
+freq48[ZONEID] <- nrow(OUTLIER_LIST[[ZONEID]])[1]
+dura48[ZONEID] <- sum(OUTLIER_LIST[[ZONEID]]$LENGTH)
+}
+sum(freq48)
+```
+
+    ## [1] 11
+
+``` r
+sum(dura48)
+```
+
+    ## [1] 790
+
+``` r
+freq <- rbind(FarmNo, freq48)
+dura <- rbind(FarmNo, dura48)
+freq
+```
+
+    ##        [,1] [,2] [,3] [,4] [,5] [,6] [,7] [,8] [,9] [,10]
+    ## FarmNo    1    2    3    4    5    6    7    8    9    10
+    ## freq48    0    2    0    0    1    0    0    4    4     0
+
+``` r
+dura
+```
+
+    ##        [,1] [,2] [,3] [,4] [,5] [,6] [,7] [,8] [,9] [,10]
+    ## FarmNo    1    2    3    4    5    6    7    8    9    10
+    ## dura48    0  232    0    0   54    0    0  285  219     0
+
+### 3 Impact of number of consecutive hours on detection results
+
+When using other hours consecutive hours as the criteria, the detected
+event results will be different.
+
+When the maintenance event is defined that wind power remains zero for
+36 consecutive hours, then we have the following findings. Note that the
+outlier lists are not shown for simplicity.
+
+> Besides wind farm \#2,\#5,\#8,\#9, the wind farm \#7 will also has
+> outliers (or maintenance events)
+
+> The number of events of Wind farm \#2,\#5,\#7, \#8 and \#9 are
+> increased to 3,2,1,7,7 respecitvely.
+
+> Wind farm \#2 still has the longest single maintenance event lasting
+> 177 hours and the second longest event is still 132 hours for wind
+> farm \#8.
+
+> The total number of maintenance is increased to 20 times. From their
+> distribution in wind farms, we can see that, wind farm \#8 and 9 are
+> still the most frequently maintained (7 times for both).
+
+> The total hours of maintenance is increased to 1156 hours. From their
+> distribution in wind farms, we can see that, wind farm \#8 has the
+> longest total maintenance hours (410 hours).
+
+``` r
+FarmNo <- 1:10   # we have ten wind farms
+MAX_LENGTH <- 36
+OUTLIER_LIST <- list(WF1=NULL, WF2=NULL, WF3=NULL, WF4=NULL, WF5=NULL, WF6=NULL, WF7=NULL, WF8=NULL, WF9=NULL, WF10=NULL)
+
+for(ZONEID in FarmNo)
+{
+  OUTLIER_LIST[[ZONEID]] <- data.frame(START=rep(NA,20), END=rep(NA,20), LENGTH=rep(NA,20), START_TIMESTAMP=rep(NA,20), END_TIMESTAMP=rep(NA,20))
+  zone_data <- data[data$ZONEID==ZONEID, ]
+  zero_index <- which(zone_data$TARGETVAR==0)
+  m <- length(zero_index)
+  
+  
+  i <- 1
+  temp <- 0
+  while(i < m)
+  {
+    start <- i
+    while((zero_index[i+1]==(zero_index[i]+1))&((i+1)<=m)) i <- i + 1
+    end <- i
+    if(start!=end)
+    {
+      start_index <- zero_index[start]
+      end_index   <- zero_index[end]
+      start_end   <- end_index-start_index+1
+      if(start_end >= MAX_LENGTH)
+      {
+        temp <- temp + 1
+        OUTLIER_LIST[[ZONEID]]$START[temp]  <- start_index
+        OUTLIER_LIST[[ZONEID]]$END[temp]    <- end_index
+        OUTLIER_LIST[[ZONEID]]$LENGTH[temp] <- start_end
+        OUTLIER_LIST[[ZONEID]]$START_TIMESTAMP[temp]  <- format(zone_data$TIMESTAMP[start_index], "%Y%m%d %H:%M")
+        OUTLIER_LIST[[ZONEID]]$END_TIMESTAMP[temp]    <- format(zone_data$TIMESTAMP[end_index], "%Y%m%d %H:%M")
+      }
+    }
+    i <- i + 1
+  }
+  OUTLIER_LIST[[ZONEID]] <- OUTLIER_LIST[[ZONEID]][-((temp+1):20), ]
+
+  
+  outlier_amount <- dim(OUTLIER_LIST[[ZONEID]])[1]
+  if(outlier_amount != 0)
+  {
+    vec <- vector()
+    for(i in 1:outlier_amount)
+    {
+      start_index <- OUTLIER_LIST[[ZONEID]]$START[i]
+      end_index   <- OUTLIER_LIST[[ZONEID]]$END[i]
+      vec <- c(vec, -start_index:-end_index)
+    }
+    clean_data <- rbind(clean_data, zone_data[ vec, ])
+    #cat("Wind Farm #", ZONEID, "\n", sep="")
+    #print(OUTLIER_LIST[[ZONEID]])
+    #cat("\n")
+  }
+  else
+  {
+    clean_data <- rbind(clean_data, zone_data)
+  }
+}
+
+freq36 <- NULL
+dura36 <- NULL
+for(ZONEID in FarmNo)
+{
+freq36[ZONEID] <- nrow(OUTLIER_LIST[[ZONEID]])[1]
+dura36[ZONEID] <- sum(OUTLIER_LIST[[ZONEID]]$LENGTH)
+}
+sum(freq36)
+```
+
+    ## [1] 20
+
+``` r
+sum(dura36)
+```
+
+    ## [1] 1156
+
+``` r
+freq <- rbind(FarmNo, freq36)
+dura <- rbind(FarmNo, dura36)
+freq
+```
+
+    ##        [,1] [,2] [,3] [,4] [,5] [,6] [,7] [,8] [,9] [,10]
+    ## FarmNo    1    2    3    4    5    6    7    8    9    10
+    ## freq36    0    3    0    0    2    0    1    7    7     0
+
+``` r
+dura
+```
+
+    ##        [,1] [,2] [,3] [,4] [,5] [,6] [,7] [,8] [,9] [,10]
+    ## FarmNo    1    2    3    4    5    6    7    8    9    10
+    ## dura36    0  274    0    0   91    0   38  410  343     0
+
+When the maintenance event is defined that wind power remains zero for
+24 consecutive hours, then we have the following findings.
+
+> Both wind farm \#1,\#2,\#4,\#5,\#6,\#7,\#8,\#9 will are detected
+> maintenance events. Wind farm \#1,\#4,\#6 are newly detected.
+
+> The number of events of these are increased to 1,3,1,2,1,3,9,13
+> respecitvely.
+
+> Wind farm \#2 still has the longest single maintenance event lasting
+> 177 hours and the second longest event is still 132 hours for wind
+> farm \#8.
+
+> The total number of maintenance is increased to 33 times. From their
+> distribution in wind farms, we can see that, wind farm \#9 becomes the
+> most frequently maintained (13 times), while wind farm \#8 is the
+> second most frequently maintained (9 times)
+
+> The total hours of maintenance is increased to 1551 hours. From their
+> distribution in wind farms, we can see that, wind farm \#8 has the
+> longest total maintenance hours (466 hours).
+
+``` r
+FarmNo <- 1:10   # we have ten wind farms
+MAX_LENGTH <- 24
+OUTLIER_LIST <- list(WF1=NULL, WF2=NULL, WF3=NULL, WF4=NULL, WF5=NULL, WF6=NULL, WF7=NULL, WF8=NULL, WF9=NULL, WF10=NULL)
+
+for(ZONEID in FarmNo)
+{
+  OUTLIER_LIST[[ZONEID]] <- data.frame(START=rep(NA,20), END=rep(NA,20), LENGTH=rep(NA,20), START_TIMESTAMP=rep(NA,20), END_TIMESTAMP=rep(NA,20))
+  zone_data <- data[data$ZONEID==ZONEID, ]
+  zero_index <- which(zone_data$TARGETVAR==0)
+  m <- length(zero_index)
+  
+  
+  i <- 1
+  temp <- 0
+  while(i < m)
+  {
+    start <- i
+    while((zero_index[i+1]==(zero_index[i]+1))&((i+1)<=m)) i <- i + 1
+    end <- i
+    if(start!=end)
+    {
+      start_index <- zero_index[start]
+      end_index   <- zero_index[end]
+      start_end   <- end_index-start_index+1
+      if(start_end >= MAX_LENGTH)
+      {
+        temp <- temp + 1
+        OUTLIER_LIST[[ZONEID]]$START[temp]  <- start_index
+        OUTLIER_LIST[[ZONEID]]$END[temp]    <- end_index
+        OUTLIER_LIST[[ZONEID]]$LENGTH[temp] <- start_end
+        OUTLIER_LIST[[ZONEID]]$START_TIMESTAMP[temp]  <- format(zone_data$TIMESTAMP[start_index], "%Y%m%d %H:%M")
+        OUTLIER_LIST[[ZONEID]]$END_TIMESTAMP[temp]    <- format(zone_data$TIMESTAMP[end_index], "%Y%m%d %H:%M")
+      }
+    }
+    i <- i + 1
+  }
+  OUTLIER_LIST[[ZONEID]] <- OUTLIER_LIST[[ZONEID]][-((temp+1):20), ]
+
+  
+  outlier_amount <- dim(OUTLIER_LIST[[ZONEID]])[1]
+  if(outlier_amount != 0)
+  {
+    vec <- vector()
+    for(i in 1:outlier_amount)
+    {
+      start_index <- OUTLIER_LIST[[ZONEID]]$START[i]
+      end_index   <- OUTLIER_LIST[[ZONEID]]$END[i]
+      vec <- c(vec, -start_index:-end_index)
+    }
+    clean_data <- rbind(clean_data, zone_data[ vec, ])
+    #cat("Wind Farm #", ZONEID, "\n", sep="")
+    #print(OUTLIER_LIST[[ZONEID]])
+    #cat("\n")
+  }
+  else
+  {
+    clean_data <- rbind(clean_data, zone_data)
+  }
+}
+
+freq24 <- NULL
+dura24 <- NULL
+for(ZONEID in FarmNo)
+{
+freq24[ZONEID] <- nrow(OUTLIER_LIST[[ZONEID]])[1]
+dura24[ZONEID] <- sum(OUTLIER_LIST[[ZONEID]]$LENGTH)
+}
+sum(freq24)
+```
+
+    ## [1] 33
+
+``` r
+sum(dura24)
+```
+
+    ## [1] 1551
+
+``` r
+freq <- rbind(FarmNo, freq24)
+dura <- rbind(FarmNo, dura24)
+freq
+```
+
+    ##        [,1] [,2] [,3] [,4] [,5] [,6] [,7] [,8] [,9] [,10]
+    ## FarmNo    1    2    3    4    5    6    7    8    9    10
+    ## freq24    1    3    0    1    2    1    3    9   13     0
+
+``` r
+dura
+```
+
+    ##        [,1] [,2] [,3] [,4] [,5] [,6] [,7] [,8] [,9] [,10]
+    ## FarmNo    1    2    3    4    5    6    7    8    9    10
+    ## dura24   32  274    0   29   91   34  100  466  525     0
+
+### 4 Summary
+
+As summarized below, when we use different consecutive hours as the
+criteria, we can adjust the conservativeness of the detection results.
+48-hour criteria will give the most conservative result. When reducing
+the number of hours in the criteria, more maintenance events are
+detected.
+
+In general, we can conclude that:
+
+> Wind farm \#9 is most frequently maintained no matter what detection
+> parameters are chosen.
+
+> Wind farm \#8 has the largest maintenance duration no matter what
+> detection parameters are chosen.
+
+> Wind farm \#3 and \#10 are never maintained in all the detections.
+
+Therefore, some suggestion for the wind farm owners include:
+
+> Install new wind turbine generators for wind farm \#8 and 9, becasue
+> they may have been used for a long time
+
+> Other wind farms should learn some operation experience from Wind farm
+> \#3 and \#10.
+
+> In general, the maintenance events take too much time. It would be
+> better to improve the maintenance efficiency every time to have more
+> profit.
+
+``` r
+freq <- rbind(FarmNo, freq48, freq36, freq24)
+dura <- rbind(FarmNo, dura48, dura36, dura24)
+freq
+```
+
+    ##        [,1] [,2] [,3] [,4] [,5] [,6] [,7] [,8] [,9] [,10]
+    ## FarmNo    1    2    3    4    5    6    7    8    9    10
+    ## freq48    0    2    0    0    1    0    0    4    4     0
+    ## freq36    0    3    0    0    2    0    1    7    7     0
+    ## freq24    1    3    0    1    2    1    3    9   13     0
+
+``` r
+dura
+```
+
+    ##        [,1] [,2] [,3] [,4] [,5] [,6] [,7] [,8] [,9] [,10]
+    ## FarmNo    1    2    3    4    5    6    7    8    9    10
+    ## dura48    0  232    0    0   54    0    0  285  219     0
+    ## dura36    0  274    0    0   91    0   38  410  343     0
+    ## dura24   32  274    0   29   91   34  100  466  525     0

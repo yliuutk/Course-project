@@ -1,0 +1,220 @@
+---
+title: "Exploring wind farm data (III): Cluster Analysis"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## I. Introduction of the three posts
+
+The three posts try to expore 10 large sets of wind farm data where each one contains 16,800 data points. Although based on the same data set, the three posts focus on differents aspects. 
+
+> Post 1 focuses on the data preprocessing, visualization and some preliminary analysis. 
+
+> Post 2 focuses on a practical method for anomaly detection or maintenance event detection. 
+
+> Post 3 focues on the cluster analysis.
+
+The purpose of these three posts are threefolds.
+
+> First, they are final projects in my data mining class and each post focuses on different aspects of what we learnt in the class. 
+
+> Second, they aim at providing the wind farm owners and electric power system operaters with some insights from the huge data sets.
+
+> Finally, they can serve as tutorials for 1st year PhD student in power/energy/electrical engineering, so that they can have a basic idea to deal with the realistic wind power data in their course/reserach projects.
+
+The following sections are organized as follows.
+
+> Section II introduces input data of this post 3.
+
+> Section III gives the problem description of post 3.
+
+> Section IV conducts the cluster analysis
+
+## II. Input Data
+
+
+### 1 Data source
+The data comes from Ref [1] and can be downloaded by the link in [2]. 
+
+> [1] Tao Hong, Pierre Pinson, Shu Fan, Hamidreza Zareipour, Alberto Troccoli and Rob J. Hyndman, "Probabilistic energy forecasting: Global Energy Forecasting Competition 2014 and beyond", International Journal of Forecasting, vol.32, no.3, pp 896-913, July-September, 2016.
+
+> [2] http://blog.drhongtao.com/2017/03/gefcom2014-load-forecasting-data.html
+
+It is orignally prepared for a global competition. The wind farm data used in this post can be obtained by following steps. We select the data for Task 15 because it contains the largest number of data points. 
+
+> 1) unzip the file "GEFCom2014-W_V2.zip"
+
+> 2) go the the directory: wind >> Task15>>Task15_W_Zone1_10
+
+### 2 Input data of post 3
+
+The input data of post 3 is the clean data saved after data preprocessing in post 1 and anomaly detection in post 2. It can be accessed from the directory "./RData/Clean_Data.Rdata".
+
+It has combined the 10 wind farm data togehter, has converted some attributes and added some new attributes. The 48-hour consecutive criteria in post 2 is used to detect the anomaly data. There are 790 data points are removed. Finally, the resulted data set contains 167,210 data points and attributes are explanied below.
+
+> 1 TIMESTAMP. It is in the format of "20120101 1:00" which gives the year, month, date and hour information.
+
+> 2-5 YEAR, MONTH, DAY, HOUR. Added attributes
+
+> 6 ZONEID. Index of wind farm
+
+> 7 TARGETVAR. It means wind power generation, which has been normalized by the nominal capacities of each wind farm.
+
+> 8-9 U10 and V10. They means the wind speeds along u and v directions at the height of 10 meters. The u and v directions refer to zonal and meridionoal directions.
+
+> 10 WS10. Wind speed at 10 meters height
+
+> 11 WD10. Wind direction at 10 meters height
+
+> 12-13 U100 and V100. Similar with U10 and V10, but they mean the wind speed measured at the height of 100 meters.
+
+> 14 WS100. Wind speed at 100 meters height
+
+> 15 WD100. Wind direction at 100 meters height
+
+## III. Problem description
+
+Due to the climate change, the traditional energy resources are gradually replaced by renewable energies in recent years. The most promising renewable energy is wind power. However, the wind has very strong stochastic attribute and the wind power is very hard to be accurately predicted. This poses a great challenge to electric power system operators and may make the power system not secure any more. To ensure the secure operation, we need to improve the wind power forecasting accuracy. There are many efforts in the power system community. 
+
+This post 3 mainly focuses on the clustering analysis of the wind farm data. Also, based on the culstering analysis, we aim at giving some suggestions for the wind farm owners and electricity power system operators. By mining the wind power generation pattern in different months of a year and different hours of a day, the system operators can expect how much power the wind farm can generate, and then can schedule other power plants (for example, coal-fired power plants) to meet the electricity demand of customers.
+
+## IV. Cluster analysis
+
+Due to the large size of the data set, we performed the cluster analysis for each wind farm. For simplicity, this post only show the cluster analysis for one wind farm, #1, which contains 16,000 data points. Despite the reduced data set size, the computation speed is very slow.
+
+### 1 Read the input data
+
+The attribute TIMESTAMP is not suitable to be scaled. So it is excluded from the analysis. Also, the attribute ZONEID is also excluded because we only analyze one wind farm data. Therefore, after simple preprocessing, the data used for cluster analysis are named as "data" and the index of each attribute is changed as below.
+
+> 1-4 YEAR, MONTH, DAY, HOUR. Added attributes
+
+> 5 TARGETVAR. It means wind power generation, which has been normalized by the nominal capacities of each wind farm.
+
+> 6-7 U10 and V10. They means the wind speeds along u and v directions at the height of 10 meters. The u and v directions refer to zonal and meridionoal directions.
+
+> 8-9 WS10 and WD10.  Wind speed and direction at 10 meters height
+
+> 10-11 U100 and V100. Similar with U10 and V10, but they mean the wind speed measured at the height of 100 meters.
+
+> 12-13 WS100 and WD100. Wind speed and direction at 100 meters height
+
+
+```{r}
+library(fpc)
+library(cluster)
+load(paste("./RData/Clean_Data.Rdata",sep=""))
+head(clean_data,3)
+nrow(clean_data)
+summary(clean_data)
+data <- scale(clean_data[,c(2:5,7:15)])
+```
+
+### 2 Hierarchical clustering with Euclidean distance
+
+Use the wind farm #1 as an example. The cluster analysis for other wind farms are the similar and are omitted here for simplicity.
+
+From the dendogram, we can see it's better to have 2 groups. Each group contains 10,733 data points and 6067 data points, respectively. 
+
+
+From the cluster analysis, we can have following observations.
+
+> The group #1 is characterized as low wind power, low wind speed, large wind speed angle (no matter at 10 meters or 100 meters height); They tend to occur at the first half year, i.e., from January to June. On each day, they tend to occur at the second half day, i.e., around the afternoon and the evening.  
+
+> The group #2 is characterized as high wind power, high wind speed, large wind speed angle (no matter at 10 meters or 100 meters height); They tend to occur at the second half year, i.e., from July to December. On each day, they tend to occur at the first half day, i.e., early in the morning.
+
+
+```{r}
+data1 <- data[which(clean_data$ZONEID==1),]
+d <- dist(data1, method = "euclidean") #heirarchical clustering
+fit <- hclust(d, method="complete")
+plot(fit)
+rect.hclust(fit, k=2, border="red")
+
+groups <- cutree(fit, k=2)
+x<-cbind(data1,groups)
+x1<- subset(x, groups==1)
+x2<- subset(x, groups==2)
+nrow(x1)
+nrow(x2)
+tab <- as.data.frame(matrix(NA,nrow=13,ncol=6))
+names(tab) <- c("C1.m","C1.sd","C2.m","C2.sd","All.m","All.sd")
+row.names(tab) <- names(data1)
+tab[,5] <- round(colMeans(data1,2))
+tab[,6] <- round(apply(data1,2,sd),2)
+for(i in 1:2){
+cluster.data <- data1[groups==i,]
+tab[,2*i-1] <- round(colMeans(cluster.data),2)
+tab[,2*i] <- round(apply(cluster.data,2,sd),2)
+}
+tab
+```
+
+### 3 Stability of the Culster
+To check the stability of the clusters, we removed a random 5% of the data (by taking a random sample of 95% of the records), and repeated the analysis. The number of points in each group are quite different from before. But the labels of each clusters are quite similar with the labels before. So, the stability of the clusters are not bad.
+
+```{r}
+xx1 <- sample(1:nrow(data1), round(0.95*nrow(data1)), replace=F)
+xx2 <- sort(xx1)
+data2 = data1[xx2,]
+nrow(data2)
+d2 <- dist(data2, method = "euclidean") #heirarchical clustering
+fit2 <- hclust(d2, method="complete")
+plot(fit2)
+rect.hclust(fit2, k=2, border="red")
+
+groups2 <- cutree(fit2, k=2)
+x<-cbind(data2,groups2)
+x1<- subset(x, groups2==1)
+x2<- subset(x, groups2==2)
+nrow(x1)
+nrow(x2)
+tab <- as.data.frame(matrix(NA,nrow=13,ncol=6))
+names(tab) <- c("C1.m","C1.sd","C2.m","C2.sd","All.m","All.sd")
+row.names(tab) <- names(data2)
+tab[,5] <- round(colMeans(data2,2))
+tab[,6] <- round(apply(data2,2,sd),2)
+for(i in 1:2){
+cluster.data <- data2[groups2==i,]
+tab[,2*i-1] <- round(colMeans(cluster.data),2)
+tab[,2*i] <- round(apply(cluster.data,2,sd),2)
+}
+tab
+```
+
+### 4 k-means clustering
+
+We then use k-means clustering with the same data and same number of clusters as in Section IV-2. The labels of the two groups are similar with hierarchical clustering. Also, the number of points in each group are also similar. This demonstrates very good consistency.
+
+```{r}
+fit3 <- kmeans(data1, 2)
+fit3$center  # centers of each variable
+fit3$size
+groups3 <- fit3$cluster
+x<-cbind(data1,groups3)
+x1<- subset(x, groups3==1)
+x2<- subset(x, groups3==2)
+nrow(x1)
+nrow(x2)
+tab <- as.data.frame(matrix(NA,nrow=13,ncol=6))
+names(tab) <- c("C1.m","C1.sd","C2.m","C2.sd","All.m","All.sd")
+row.names(tab) <- names(data1)
+tab[,5] <- round(colMeans(data1,2))
+tab[,6] <- round(apply(data1,2,sd),2)
+for(i in 1:2){
+cluster.data <- data1[groups3==i,]
+tab[,2*i-1] <- round(colMeans(cluster.data),2)
+tab[,2*i] <- round(apply(cluster.data,2,sd),2)
+}
+tab
+```
+## 5 Summary
+
+These results can provide very useful insights for wind farm owners and power system operators to schedue the power output while satisfying the electricity demand of customers. For example,
+
+> In the first half year, and in an afternoon, we can expect the wind speed is generally slow and wind power is not very enough. Then the power system operators can schedule the traditional coal-fired power plant to generate more electricity for the customers. 
+
+> In the second half year, and in the morning, we can expect the wind speed is generally fast and wind power is sufficient to meet the customer demand. To make full use of the renewable energy, we may want the wind turbine to generate as many power as possible, so that the other power coal-fired plants can generate less power. This can help reduce the carbon emission.
